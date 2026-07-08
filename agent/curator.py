@@ -1035,11 +1035,14 @@ def _write_decision_logs(
         try:
             umbrella_dir.mkdir(parents=True, exist_ok=True)
             existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            if not existing.strip():
+            is_new = not existing.strip()
+            if is_new:
                 existing = f"# Decision Log\n\nSkill: `{into}`\n\n"
             # Only append if this exact entry isn't already present
             if ts not in existing or name not in existing:
                 with open(log_path, "a", encoding="utf-8") as f:
+                    if is_new:
+                        f.write(existing)  # header first
                     f.write(entry_text)
         except OSError as e:
             logger.debug("Curator DECISION_LOG.md write failed for %s: %s", into, e)
@@ -1065,10 +1068,13 @@ def _write_decision_logs(
         try:
             archive_skill_dir.mkdir(parents=True, exist_ok=True)
             existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
-            if not existing.strip():
+            is_new = not existing.strip()
+            if is_new:
                 existing = f"# Decision Log\n\nSkill: `{name}` (archived)\n\n"
             if ts not in existing or name not in existing:
                 with open(log_path, "a", encoding="utf-8") as f:
+                    if is_new:
+                        f.write(existing)  # header first
                     f.write(entry_text)
         except OSError as e:
             logger.debug("Curator DECISION_LOG.md write failed for %s: %s", name, e)

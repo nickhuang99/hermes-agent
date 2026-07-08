@@ -2,9 +2,8 @@
 
 The decision_context parameter (task-001) records agent decision rationale to
 DECISION_LOG.md in the skill directory. These tests verify creation, appending
-on patch, format correctness, and backward compatibility (optional parameter).
-
-Skill-view integration (task-002) is not yet done; those tests are skipped.
+on patch, format correctness, backward compatibility, and skill_view integration
+(task-002, reading DECISION_LOG.md via linked_files + file_path).
 """
 
 import json
@@ -22,16 +21,23 @@ from tools.skill_manager_tool import skill_manage
 
 @pytest.fixture(autouse=True)
 def _patch_skills_dir(monkeypatch):
-    """Align skill_manager_tool.SKILLS_DIR with the test-session HERMES_HOME.
+    """Align skill_manager_tool.SKILLS_DIR and skills_tool.SKILLS_DIR with the
+    test-session HERMES_HOME.
 
     ``SKILLS_DIR`` is a module-level constant resolved at import time, before
     the conftest monkeypatches ``HERMES_HOME``.  Without this fixture, create
     writes to the real ~/.hermes/skills/ while _find_skill (patch/edit/
     delete) looks in the temp dir.  Patching it here makes them agree.
+
+    Also patches ``tools.skills_tool.SKILLS_DIR`` so skill_view can find
+    skills created during the test (both modules have their own import-time
+    SKILLS_DIR constant).
     """
     import tools.skill_manager_tool as smt
+    import tools.skills_tool as st
     test_skills_dir = get_hermes_home() / "skills"
     monkeypatch.setattr(smt, "SKILLS_DIR", test_skills_dir)
+    monkeypatch.setattr(st, "SKILLS_DIR", test_skills_dir)
     return test_skills_dir
 
 
@@ -394,15 +400,7 @@ class TestBackwardCompatibility:
 # ---------------------------------------------------------------------------
 # Test 6: skill_view exposes DECISION_LOG.md in linked_files
 # ---------------------------------------------------------------------------
-# Skill-view integration (task-002: impl-decision-log-read) is not yet
-# implemented. skills_tool.py does not scan for DECISION_LOG.md and does
-# not include it in linked_files. These tests are skipped until the
-# implementation catches up.
 
-@pytest.mark.skip(
-    reason="skill_view integration for DECISION_LOG.md not yet implemented "
-           "(depends on task-002: impl-decision-log-read)"
-)
 class TestSkillViewExposesDecisionLog:
     def test_linked_files_contains_decision_log(self):
         """After creating with decision_context, skill_view linked_files includes it."""
@@ -441,10 +439,6 @@ class TestSkillViewExposesDecisionLog:
 # Test 7: skill without decision log has no linked_file reference
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(
-    reason="skill_view integration for DECISION_LOG.md not yet implemented "
-           "(depends on task-002: impl-decision-log-read)"
-)
 class TestSkillWithoutLogNoLinkedFile:
     def test_no_decision_log_in_linked_files(self):
         """Skill created without decision_context should not list DECISION_LOG.md."""

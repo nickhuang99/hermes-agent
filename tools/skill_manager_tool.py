@@ -39,6 +39,7 @@ import re
 import shutil
 import tempfile
 import contextvars as _ctxvars
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1295,6 +1296,7 @@ def apply_skill_pending(payload: Dict[str, Any]) -> str:
             new_string=payload.get("new_string"),
             replace_all=payload.get("replace_all", False),
             absorbed_into=payload.get("absorbed_into"),
+            decision_context=payload.get("decision_context"),
         )
     finally:
         _skill_gate_bypass.reset(token)
@@ -1311,6 +1313,7 @@ def skill_manage(
     new_string: str = None,
     replace_all: bool = False,
     absorbed_into: str = None,
+    decision_context: dict = None,
 ) -> str:
     """
     Manage user-created skills. Dispatches to the appropriate action handler.
@@ -1397,6 +1400,56 @@ def skill_manage(
                     forget(name)
         except Exception:
             pass
+
+    if decision_context is not None and result.get("success") and action in {"create", "patch", "edit"}:
+        try:
+            # Resolve the skill directory from the result or by lookup
+            skill_dir = None
+            if result.get("skill_md"):
+                skill_dir = Path(result["skill_md"]).parent
+            elif result.get("path"):
+                # result["path"] may be relative — resolve through skills dirs
+                from agent.skill_utils import get_all_skills_dirs
+                for root in get_all_skills_dirs():
+                    candidate = root / result["path"]
+                    if candidate.exists():
+                        skill_dir = candidate
+                        break
+                if skill_dir is None:
+                    # Try as absolute
+                    candidate = Path(result["path"])
+                    if candidate.exists():
+                        skill_dir = candidate
+            if skill_dir is None:
+                existing = _find_skill(name)
+                if existing:
+                    skill_dir = existing["path"]
+
+            if skill_dir is not None:
+                log_path = skill_dir / "DECISION_LOG.md"
+                timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                diagnosis = decision_context.get("diagnosis", "")
+                evidence = decision_context.get("evidence", "")
+                outcome = decision_context.get("outcome", "")
+
+                lines = []
+                # Read existing log if present
+                if log_path.exists():
+                    existing_text = log_path.read_text(encoding="utf-8")
+                    lines = [existing_text.rstrip(), ""]
+                else:
+                    lines = ["# Decision Log", "", f"Skill: `{name}`", ""]
+
+                entry = (
+                    f"## {timestamp} — {action} ({outcome or 'unspecified'})\n\n"
+                    f"**Diagnosis:** {diagnosis}\n\n"
+                    f"**Evidence:** {evidence}\n\n"
+                    f"**Outcome:** {outcome}\n"
+                )
+                lines.append(entry)
+                log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to write DECISION_LOG.md for skill '%s': %s", name, e, exc_info=True)
 
     return json.dumps(result, ensure_ascii=False)
 
@@ -1514,6 +1567,20 @@ SKILL_MANAGE_SCHEMA = {
                     "rewriting) will have to guess at intent."
                 )
             },
+            "decision_context": {
+                "type": "object",
+                "description": (
+                    "Optional. When provided on create/patch/edit, records the agent's "
+                    "decision rationale for this skill revision. Fields: diagnosis (str), "
+                    "evidence (str), outcome (one of: accept, revise, reject, defer). "
+                    "Stored to DECISION_LOG.md in the skill directory."
+                ),
+                "properties": {
+                    "diagnosis": {"type": "string", "description": "What problem was identified"},
+                    "evidence": {"type": "string", "description": "What evaluation evidence supported the change"},
+                    "outcome": {"type": "string", "enum": ["accept", "reject", "revise", "defer"], "description": "Decision outcome"}
+                },
+            },
         },
         "required": ["action", "name"],
     },
@@ -1537,6 +1604,7 @@ registry.register(
         old_string=args.get("old_string"),
         new_string=args.get("new_string"),
         replace_all=args.get("replace_all", False),
-        absorbed_into=args.get("absorbed_into")),
+        absorbed_into=args.get("absorbed_into"),
+        decision_context=args.get("decision_context")),
     emoji="📝",
 )

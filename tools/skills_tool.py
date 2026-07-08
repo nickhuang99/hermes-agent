@@ -1374,6 +1374,10 @@ def skill_view(
         if script_files:
             linked_files["scripts"] = script_files
 
+        # DECISION_LOG.md — recorded decision history (diagnosis → revision → evidence → outcome)
+        if (skill_dir / "DECISION_LOG.md").exists():
+            linked_files["DECISION_LOG.md"] = "Decision history log (diagnosis → revision → evidence → outcome)"
+
         try:
             rel_path = str(skill_md.relative_to(SKILLS_DIR))
         except ValueError:
@@ -1600,7 +1604,7 @@ SKILLS_LIST_SCHEMA = {
 
 SKILL_VIEW_SCHEMA = {
     "name": "skill_view",
-    "description": "Skills allow for loading information about specific tasks and workflows, as well as scripts and templates. Load a skill's full content or access its linked files (references, templates, scripts). First call returns SKILL.md content plus a 'linked_files' dict showing available references/templates/scripts. To access those, call again with file_path parameter.",
+    "description": "Skills allow for loading information about specific tasks and workflows, as well as scripts and templates. Load a skill's full content or access its linked files (references, templates, scripts). First call returns SKILL.md content plus a 'linked_files' dict showing available references/templates/scripts. To access those, call again with file_path parameter. Skills with recorded decision history also expose DECISION_LOG.md.",
     "parameters": {
         "type": "object",
         "properties": {

@@ -990,6 +990,90 @@ def _reconcile_classification(
     return {"consolidated": consolidated, "pruned": pruned}
 
 
+# ---------------------------------------------------------------------------
+# Tier 1 decision logging — zero extra tokens, pure file I/O
+# ---------------------------------------------------------------------------
+
+def _write_decision_logs(
+    consolidated: List[Dict[str, Any]],
+    pruned: List[Dict[str, Any]],
+    started_at: datetime,
+) -> None:
+    """Write DECISION_LOG.md entries for each consolidated and pruned skill.
+
+    Tier 1 decision logging (zero extra tokens): persists the curator's
+    existing classification results to per-skill DECISION_LOG.md files.
+    Consolidated skills get an entry in the umbrella's DECISION_LOG.md;
+    pruned skills get an entry in ``.archive/{name}/DECISION_LOG.md``.
+
+    Best-effort: a file I/O error on one skill doesn't block the rest,
+    and a missing umbrella or archive directory is silently skipped.
+    """
+    skills_dir = get_hermes_home() / "skills"
+    archive_dir = skills_dir / ".archive"
+    ts = started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    for entry in consolidated:
+        into = entry.get("into", "")
+        if not into:
+            continue
+        name = entry.get("name", "")
+        reason = (entry.get("reason") or "").strip()
+        if not reason:
+            reason = f"Skill '{name}' was merged into umbrella '{into}'"
+
+        umbrella_dir = skills_dir / into
+        log_path = umbrella_dir / "DECISION_LOG.md"
+
+        entry_text = (
+            f"## {ts} — consolidated from {name} (accept)\n\n"
+            f"**Diagnosis:** Skill `{name}` was merged into umbrella `{into}`\n\n"
+            f"**Evidence:** {reason}\n\n"
+            f"**Outcome:** accept (merged)\n\n"
+        )
+
+        try:
+            umbrella_dir.mkdir(parents=True, exist_ok=True)
+            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+            if not existing.strip():
+                existing = f"# Decision Log\n\nSkill: `{into}`\n\n"
+            # Only append if this exact entry isn't already present
+            if ts not in existing or name not in existing:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(entry_text)
+        except OSError as e:
+            logger.debug("Curator DECISION_LOG.md write failed for %s: %s", into, e)
+
+    for entry in pruned:
+        name = entry.get("name", "")
+        if not name:
+            continue
+        reason = (entry.get("reason") or "").strip()
+        if not reason:
+            reason = f"Skill '{name}' was archived for staleness"
+
+        archive_skill_dir = archive_dir / name
+        log_path = archive_skill_dir / "DECISION_LOG.md"
+
+        entry_text = (
+            f"## {ts} — archived (reject)\n\n"
+            f"**Diagnosis:** Skill was archived for staleness\n\n"
+            f"**Evidence:** {reason}\n\n"
+            f"**Outcome:** reject (pruned)\n\n"
+        )
+
+        try:
+            archive_skill_dir.mkdir(parents=True, exist_ok=True)
+            existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+            if not existing.strip():
+                existing = f"# Decision Log\n\nSkill: `{name}` (archived)\n\n"
+            if ts not in existing or name not in existing:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(entry_text)
+        except OSError as e:
+            logger.debug("Curator DECISION_LOG.md write failed for %s: %s", name, e)
+
+
 def _build_rename_summary(
     *,
     before_names: Set[str],
@@ -1176,6 +1260,15 @@ def _write_run_report(
     )
     consolidated = classification["consolidated"]
     pruned = classification["pruned"]
+
+    # Tier 1: persist decision entries to per-skill DECISION_LOG.md files.
+    # Zero extra tokens — uses the curator's existing classification data.
+    # Best-effort; I/O failures are logged and never block the run.
+    _write_decision_logs(
+        consolidated=consolidated,
+        pruned=pruned,
+        started_at=started_at,
+    )
 
     # Rewrite cron job skill references. When the curator consolidates
     # skill X into umbrella Y, any cron job that lists X fails to load

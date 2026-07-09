@@ -644,13 +644,17 @@ def session_search(
     ``@session:<profile>/<id>`` link). Scroll wins over read/discovery when an
     anchor is set — the agent has asked for a specific slice.
     """
+    try:
+        from hermes_state import SessionDB, format_session_db_unavailable
+    except Exception:
+        logging.debug("SessionDB unavailable for session_search", exc_info=True)
+        return tool_error("Session database is not available", success=False)
+
     if db is None:
         try:
-            from hermes_state import SessionDB
             db = SessionDB()
         except Exception:
-            logging.debug("SessionDB unavailable for session_search", exc_info=True)
-            from hermes_state import format_session_db_unavailable
+            logging.debug("SessionDB() failed for session_search", exc_info=True)
             return tool_error(format_session_db_unavailable(), success=False)
 
     # Normalise a raw `@session:<profile>/<id>` link value passed as session_id.

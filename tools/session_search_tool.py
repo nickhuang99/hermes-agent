@@ -630,6 +630,8 @@ def session_search(
     sort: str = None,
     # Cross-profile (any shape)
     profile: str = None,
+    # External DB path (any shape)
+    db_path: str = None,
 ) -> str:
     """Single-shape tool. Mode inferred from which args are set.
 
@@ -662,6 +664,19 @@ def session_search(
             session_id = emb_id
             if emb_profile and (profile is None or not str(profile).strip()):
                 profile = emb_profile
+
+    # External DB path: open a read-only SessionDB at the given path. Same
+    # safety semantics as cross-profile — mode=ro, no write lock, no contention.
+    if db_path is not None and str(db_path).strip():
+        from pathlib import Path as _Path
+        p = _Path(db_path).expanduser().resolve()
+        if not p.exists():
+            return tool_error(f"db_path not found: {p}", success=False)
+        try:
+            db = SessionDB(db_path=p, read_only=True)
+        except Exception as e:
+            return tool_error(f"db_path '{p}': {e}", success=False)
+        current_session_id = None
 
     # Cross-profile read: swap in the named profile's DB (read-only) for every
     # shape below. The current-session-lineage guards no longer apply across
@@ -891,6 +906,17 @@ SESSION_SEARCH_SCHEMA = {
                     "Omit to use the current profile."
                 ),
             },
+            "db_path": {
+                "type": "string",
+                "description": (
+                    "Optional absolute path to an external session DB (SQLite with FTS5, "
+                    "same schema as state.db). Opens read-only — safe against live writers. "
+                    "Use for searching imported conversation corpora (Claude history, "
+                    "project wikis, etc.) alongside the native session DB. When set, "
+                    "replaces the default state.db for this single call. Omit to use "
+                    "the current session's database."
+                ),
+            },
         },
         "required": [],
     },
@@ -913,6 +939,7 @@ registry.register(
         window=args.get("window", 5),
         sort=args.get("sort"),
         profile=args.get("profile"),
+        db_path=args.get("db_path"),
         db=kw.get("db"),
         current_session_id=kw.get("current_session_id"),
     ),

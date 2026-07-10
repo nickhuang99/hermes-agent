@@ -1,0 +1,6 @@
+id: claude_search
+name: Claude Search
+version: 1.0.0
+description: Search external conversation corpus alongside Hermes sessions
+author: nickhuang99
+kind: standalone

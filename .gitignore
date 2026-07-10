@@ -81,6 +81,7 @@ web/public/ds-assets/
 mini-swe-agent/
 
 # Nix
+.envrc
 .direnv/
 .nix-stamps/
 result

@@ -13,7 +13,7 @@ from html_parser import extract_cppreference, extract_cxxstandard
 
 CPP_DIR = Path("/home/nick/work/cpp")
 CXX_DIR = Path("/home/nick/work/cxx")
-OUT_DB = Path("/home/nick/work/hermes-agent/cpp_docs.db")
+OUT_DB = Path.home() / ".hermes" / "cpp_docs.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (

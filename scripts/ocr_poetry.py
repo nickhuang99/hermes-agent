@@ -58,7 +58,10 @@ for page in range(START_PAGE, END_PAGE + 1):
         f.write(f"Page {page}/{END_PAGE} ({elapsed:.0f}s): {len(text)} chars\n")
     
     print(f"[{page}/{END_PAGE}] {elapsed:.0f}s {len(text)} chars", flush=True)
-    os.unlink(png)  # Clean up
+    try:
+        os.unlink(png)
+    except OSError:
+        pass  # Already cleaned by previous iteration
 
 # Write final output
 OUT.write_text("\n\n".join(results), encoding="utf-8")

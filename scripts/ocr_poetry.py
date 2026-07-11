@@ -14,14 +14,14 @@ os.makedirs("/tmp/poem_batch", exist_ok=True)
 
 results = []
 for page in range(START_PAGE, END_PAGE + 1):
-    png = f"/tmp/poem_batch/p{page:03d}.png"
+    png = f"/tmp/poem_batch/pg{page:03d}.png"
     
     # Convert page to image
     if not os.path.exists(png):
         subprocess.run([
             "pdftoppm", "-r", "100", "-png",
             "-f", str(page), "-l", str(page),
-            str(PDF), f"/tmp/poem_batch/p{page:03d}"
+            str(PDF), f"/tmp/poem_batch/pg{page:03d}"
         ], check=True, capture_output=True)
     
     # Read and base64

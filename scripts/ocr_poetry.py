@@ -39,7 +39,7 @@ for page in range(START_PAGE, END_PAGE + 1):
     t0 = time.time()
     try:
         resp = requests.post("http://192.168.1.8:11434/api/generate", json={
-            "model": "qwen3-vl:4b",
+            "model": "qwen3-vl:8b",
             "prompt": "输出图片中所有文字内容，直接输出不要任何说明。保留原有格式和换行。",
             "images": [img_b64],
             "stream": False,

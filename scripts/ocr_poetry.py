@@ -17,12 +17,19 @@ for page in range(START_PAGE, END_PAGE + 1):
     png = f"/tmp/poem_batch/pg{page:03d}.png"
     
     # Convert page to image
-    if not os.path.exists(png):
-        subprocess.run([
-            "pdftoppm", "-r", "100", "-png",
-            "-f", str(page), "-l", str(page),
-            str(PDF), f"/tmp/poem_batch/pg{page:03d}"
-        ], check=True, capture_output=True)
+    base = f"/tmp/poem_batch/pg{page:03d}"
+    subprocess.run([
+        "pdftoppm", "-r", "100", "-png",
+        "-f", str(page), "-l", str(page),
+        str(PDF), base
+    ], check=True, capture_output=True)
+    # pdftoppm appends -NNN; find actual file
+    import glob
+    matches = glob.glob(f"{base}*.png")
+    if not matches:
+        print(f"ERROR: no output for page {page}", flush=True)
+        continue
+    png = matches[0]
     
     # Read and base64
     with open(png, "rb") as f:
